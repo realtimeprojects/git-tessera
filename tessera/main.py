@@ -275,9 +275,7 @@ class GitTessera:
       self.git.index.commit("tessera removed: %s"%t.title)
 
 
-
-
-if __name__ == "__main__":
+def main():
   cmd = "ls"
   if len(argv) > 1:
     cmd = argv[1]
@@ -295,5 +293,5 @@ if __name__ == "__main__":
     stderr.write("unknown command: %s\n"%cmd)
     exit(2)
 
-
-
+if __name__ == "__main__":
+    main()
