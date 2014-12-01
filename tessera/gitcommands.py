@@ -37,13 +37,12 @@ class TRepository:
 
             ls_args.append(arg)
 
-
         results = self.GitTessera.ls(ls_args)
         if refspec == "-":
-            return [ results[0] ]
+            return [results[0]]
 
         if re.match("^\d+$", refspec):
-            return [ results[int(refspec)] ]
+            return [results[int(refspec)]]
 
         if refspec != "":
             ret = []
@@ -139,7 +138,7 @@ class GitCommands(object):
         gt = GitTessera(self._config)
         gr = TRepository(gt)
         ts = gr.find(args)
-        if not t:
+        if not ts:
             return False
 
         for t in ts:
@@ -165,7 +164,8 @@ class GitCommands(object):
                 <SHA1> the SHA1 id of the tessera
         """
         if len(args) < 1:
-            raise ArgumentError("git tessera edit takes one or more identifier as argument")
+            raise ArgumentError(
+                "git tessera edit takes one or more identifier as argument")
 
         gt = GitTessera(self._config)
         gr = TRepository(gt)
@@ -181,8 +181,9 @@ class GitCommands(object):
                 t = tesserae.pop()
                 if not t.error:
                     t._write_info()
-                    files = [ t.filename, t.infofile ]
-                    self.git.add( files, "tessera updated: %s" % t.get_attribute("title"))
+                    files = [t.filename, t.infofile]
+                    self.git.add(files, "tessera updated: %s"
+                                 % t.get_attribute("title"))
                     continue
                 # failed parsing
                 failed.append(t)
@@ -195,7 +196,8 @@ class GitCommands(object):
                     break
                 if answer and answer.lower() == "y":
                     break
-                tessera_paths = failed
+                # FIXME: what shall that line do?
+                #  tessera_paths = failed
             else:
                 break
 
@@ -224,7 +226,8 @@ class GitCommands(object):
 
     def cmd_remove(self, args):
         if len(args) != 1:
-            raise ArgumentError("git tessera remove takes identifier as argument")
+            raise ArgumentError(
+                "git tessera remove takes identifier as argument")
 
         key = args[0]
         tessera_file = None
