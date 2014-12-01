@@ -2,6 +2,7 @@
 
 import os
 import stat
+import re
 from subprocess import Popen
 from sys import stdin, stdout
 import types
@@ -12,6 +13,26 @@ from gittessera import GitTessera
 from mygit import MyGit
 from tesseraconfig import TesseraConfig
 from exceptions import TesseraError, ArgumentError
+
+
+class TRepository:
+    def __init__(self, git_tessera):
+        self.GitTessera = git_tessera
+
+    def find(self, refspec):
+        tesserae = self.GitTessera.ls()
+
+        if refspec == "-":
+            return tesserae[0]
+
+        m = re.match("-(\d+)", refspec)
+        if m is not None:
+            count = int(m.group(1))
+            return tesserae[count]
+
+        for t in tesserae:
+            if t.tessera_hash.startswidth(refspec):
+                return t
 
 
 class GitCommands(object):
@@ -29,20 +50,15 @@ class GitCommands(object):
             manage your project issues within your git reporitory
 
             commands:
-                help                show this help
-                help <command>      shows help about this command
-                create              create a tessera
-                edit                modify an tessera
-                ls                  list existing tesserae
-                show                show one tessera
-                remove              remove a tessera
-                tag                 add tag(s) to tessera
         """
         if len(args) > 0:
             function = self.__getattribute__("cmd_" + args[0])
             print function.__doc__
             return
         print self.cmd_help.__doc__
+        for cmd in dir(self):
+            if cmd.startswith("cmd_"):
+                print "    {0}      {1}".format(cmd[4:], cmd.__doc__)
 
     def cmd_init(self, args):
         """ git tessera init
@@ -82,7 +98,8 @@ class GitCommands(object):
                 "git tessera show takes identifier as argument")
 
         gt = GitTessera(self._config)
-        t = gt.get(args[0])
+        gr = TRepository(gt)
+        t = gr.find(args[0])
         if not t:
             return False
 
@@ -95,47 +112,44 @@ class GitCommands(object):
         return True
 
     def cmd_edit(self, args):
-        """ git tessera edit <SHA1>
+        """ git tessera edit <refspec>
 
-            opens a existing tessera identified by SHA1 in editor
+            opens a existing tessera identified by <refspec> in editor
             for modifying it. automatically add the modifications
             as a commit to the repository.
+
+            <refspec> may be:
+                '-' for the last entry
+                '-1' for the second last entry
+                '-2' for the thirt last entry
+                <SHA1> the SHA1 id of the tessera
         """
         if len(args) < 1:
             raise ArgumentError("git tessera edit takes one or more identifier as argument")
 
-        tessera_paths = []
+        tesseraes = []
         for key in args:
-            tessera_path = None
-            found = False
-            for i in os.listdir(Tessera._tesserae):
-                tessera_path = "%s/%s" % (Tessera._tesserae, i)
-                if not stat.S_ISDIR(os.lstat(tessera_path).st_mode):
-                    continue
-                if i.split('-')[0] == key or i == key:
-                    found = True
-                    break
-            if not found:
-                raise TesseraError("git tessera %s not found" % key)
+            gt = GitTessera(self._config)
+            gr = TRepository(gt)
+            t = gr.find(args[0])
 
-            tessera_paths.append(tessera_path)
+            tesseraes.append(t)
 
         while True:
-            tessera_files = ["%s/tessera" % x for x in tessera_paths]
+            tessera_files = ["%s" % x.filename for x in tesseraes]
             _edit(tessera_files, self._config)
 
             # if self.git.is_dirty():
             failed = []
-            while tessera_paths:
-                tessera_path = tessera_paths.pop()
-                t = Tessera(tessera_path, self._config)
+            while tesseraes:
+                t = tesseraes.pop()
                 if not t.error:
                     t._write_info()
-                    files = [ "%s/tessera" % tessera_path, "%s/info" % tessera_path ]
+                    files = [ t.filename, t.infofile ]
                     self.git.add( files, "tessera updated: %s" % t.get_attribute("title"))
                     continue
                 # failed parsing
-                failed.append(tessera_path)
+                failed.append(t)
 
             if failed:
                 stdout.write("Abort ? [y/N] ")
