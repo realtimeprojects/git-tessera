@@ -19,20 +19,40 @@ class TRepository:
     def __init__(self, git_tessera):
         self.GitTessera = git_tessera
 
-    def find(self, refspec):
-        tesserae = self.GitTessera.ls()
+    def find(self, args):
 
+        refspec = ""
+        ls_args = []
+        while args:
+            arg = args.pop()
+
+            if arg == "-":
+                refspec = "-"
+                continue
+
+            m = re.match("-(\d+)", arg)
+            if m is not None:
+                refspec = m.group(1)
+                continue
+
+            ls_args.append(arg)
+
+
+        results = self.GitTessera.ls(ls_args)
         if refspec == "-":
-            return tesserae[0]
+            return [ results[0] ]
 
-        m = re.match("-(\d+)", refspec)
-        if m is not None:
-            count = int(m.group(1))
-            return tesserae[count]
+        if re.match("^\d+$", refspec):
+            return [ results[int(refspec)] ]
 
-        for t in tesserae:
-            if t.tessera_hash.startswidth(refspec):
-                return t
+        if refspec != "":
+            ret = []
+            for t in results:
+                if t.tessera_hash.startswidth(refspec):
+                    ret.append(t)
+
+            return ret
+        return results
 
 
 class GitCommands(object):
@@ -85,9 +105,28 @@ class GitCommands(object):
         """ git tessera ls
 
             list available tesseraes in current git repository
+
+            git tessera ls -
+                list the last entry
+
+            git tessera ls -2
+                list the second last entry
+
+            git tessera ls - -e
+                edit the listed (last) entry
+
+            git tessera ls -2 -e
+                edit the second last entry
         """
+
+        if "-e" in args:
+            args.remove("-e")
+            return self.cmd_edit(args)
+
         gt = GitTessera(self._config)
-        tesserae = gt.ls(args)
+        tr = TRepository(gt)
+        tesserae = tr.find(args)
+
         for t in tesserae:
             print t.summary()
         return True
@@ -99,16 +138,17 @@ class GitCommands(object):
 
         gt = GitTessera(self._config)
         gr = TRepository(gt)
-        t = gr.find(args[0])
+        ts = gr.find(args)
         if not t:
             return False
 
-        short = t.summary()
-        length = len(short)
-        print "=" * length
-        print short
-        print "=" * length
-        print t.content
+        for t in ts:
+            short = t.summary()
+            length = len(short)
+            print "=" * length
+            print short
+            print "=" * length
+            print t.content
         return True
 
     def cmd_edit(self, args):
@@ -127,22 +167,18 @@ class GitCommands(object):
         if len(args) < 1:
             raise ArgumentError("git tessera edit takes one or more identifier as argument")
 
-        tesseraes = []
-        for key in args:
-            gt = GitTessera(self._config)
-            gr = TRepository(gt)
-            t = gr.find(args[0])
-
-            tesseraes.append(t)
+        gt = GitTessera(self._config)
+        gr = TRepository(gt)
+        tesserae = gr.find(args)
 
         while True:
-            tessera_files = ["%s" % x.filename for x in tesseraes]
+            tessera_files = ["%s" % x.filename for x in tesserae]
             _edit(tessera_files, self._config)
 
             # if self.git.is_dirty():
             failed = []
-            while tesseraes:
-                t = tesseraes.pop()
+            while tesserae:
+                t = tesserae.pop()
                 if not t.error:
                     t._write_info()
                     files = [ t.filename, t.infofile ]
